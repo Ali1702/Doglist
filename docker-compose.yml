@@ -1,0 +1,70 @@
+version: "3.7"
+
+services:
+    mariadb1:
+        container_name: mariadb1
+        image: mariadb:latest
+        environment:
+            MYSQL_ROOT_PASSWORD: example
+            MYSQL_USER: maxscale_user
+            MYSQL_PASSWORD: 12345678
+        ports:
+            - "3307:3306"
+        networks:
+            - mynetwork
+        volumes:
+            - ./docker_config/galera_cluster1.cnf:/etc/mysql/mariadb.conf.d/60-galera.cnf
+            - ./docker_config/init_mariadb.sql:/docker-entrypoint-initdb.d/init.sql
+
+    mariadb2:
+        container_name: mariadb2
+        image: mariadb:latest
+        environment:
+            MYSQL_ROOT_PASSWORD: example
+            MYSQL_USER: maxscale_user
+            MYSQL_PASSWORD: 12345678
+        ports:
+            - "3308:3306"
+        networks:
+            - mynetwork
+        volumes:
+            - ./docker_config/galera_cluster2.cnf:/etc/mysql/mariadb.conf.d/60-galera.cnf
+            - ./docker_config/init_mariadb.sql:/docker-entrypoint-initdb.d/init.sql
+
+    maxscale:
+        container_name: maxscale
+        image: mariadb/maxscale:latest
+        ports:
+            - "4008:4008"
+            - "4006:4006"
+            - "8989:8989"
+        depends_on:
+            - mariadb1
+            - mariadb2
+        volumes:
+            - ./maxscale.cnf:/etc/maxscale.cnf
+        networks:
+            - mynetwork
+
+    keycloak:
+        container_name: keycloak
+        image: quay.io/keycloak/keycloak:latest
+        command: -v start-dev --import-realm
+        environment:
+            KEYCLOAK_ADMIN: admin
+            KEYCLOAK_ADMIN_PASSWORD: admin
+            DB_VENDOR: H2
+        ports:
+            - "8080:8080"
+        networks:
+            - mynetwork
+        volumes:
+            - ./docker_config/keycloak.json:/opt/keycloak/data/import/keycloak.json
+
+networks:
+    mynetwork:
+        driver: bridge
+
+volumes:
+    mariadb1_data:
+    mariadb2_data:

@@ -1,0 +1,44 @@
+[maxscale]
+threads=auto
+admin_host=0.0.0.0
+admin_port=8989
+admin_auth=1
+admin_enabled=1
+admin_secure_gui=false
+
+# Define the two MariaDB servers
+[server1]
+type=server
+address=mariadb1
+port=3306
+protocol=MariaDBBackend
+
+[server2]
+type=server
+address=mariadb2
+port=3306
+protocol=MariaDBBackend
+
+# Galera Monitor
+[GaleraMonitor]
+type=monitor
+module=galeramon
+servers=server1,server2
+user=root
+password=example
+monitor_interval=2000ms
+
+# Service that listens for incoming client connections and routes queries to the servers
+[GaleraService]
+type=service
+router=readconnroute
+servers=server1,server2
+user=maxscale_user
+password=12345678
+
+# Listener for the Galera Service
+[GaleraListener]
+type=listener
+service=GaleraService
+protocol=MariaDBClient
+port=4006
