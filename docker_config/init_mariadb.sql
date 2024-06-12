@@ -4,7 +4,7 @@ FLUSH PRIVILEGES;
 CREATE DATABASE IF NOT EXISTS dogs;
 USE dogs;
 
-DROP TABLE IF EXISTS dogs;  -- Ensures the table doesn't exist already
+DROP TABLE IF EXISTS dogs; 
 
 CREATE TABLE dogs (
     id INT AUTO_INCREMENT PRIMARY KEY,
