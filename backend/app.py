@@ -1,7 +1,7 @@
 import logging
 import os
 import jwt
-from flask import Flask, request, jsonify, redirect, url_for, render_template_string
+from flask import Flask, request, jsonify, redirect, url_for
 from flask_cors import CORS
 import mysql.connector
 from keycloak import KeycloakOpenID, KeycloakGetError
@@ -26,7 +26,7 @@ db_config = {
 
 # Keycloak configuration
 private_keycloak_url = os.getenv('PRIVATE_KEYCLOAK_URL', 'http://keycloak:8080/')
-public_keycloak_url = os.getenv('PUBLIC_KEYCLOAK_URL', 'http://localhost:5000/')
+public_keycloak_url = os.getenv('PUBLIC_KEYCLOAK_URL', 'http://localhost:3000/')
 
 keycloak_openid = KeycloakOpenID(
     server_url=private_keycloak_url,  # Private Keycloak address
@@ -75,9 +75,9 @@ def callback():
     try:
         token = keycloak_openid.token(code=code, redirect_uri=redirect_uri, session_state=request.args.get('session_state'), grant_type='authorization_code')
         logging.debug(f'Received token: {token}')
-        tokens['token'] = token['access_token']
-        next_url = request.args.get('next')
-        return redirect(url_for(next_url) if next_url else url_for('home'))
+        access_token = token['access_token']
+        next_url = request.args.get('next', '/')
+        return redirect(f"http://localhost:3000?token={access_token}")
     except KeycloakGetError as e:
         logging.error(f'Error during token exchange: {e}')
         return jsonify({'message': 'Failed to obtain token from Keycloak'}), 500
@@ -104,74 +104,6 @@ def add_dog():
     connection.commit()
     connection.close()
     return jsonify({'message': 'Dog added successfully!'}), 201
-
-@app.route('/', methods=['GET'])
-def home():
-    if not tokens.get('token'):
-        return redirect(url_for('login', next='home'))
-    home_page_html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Doglist API</title>
-    </head>
-    <body>
-        <h1>Welcome to the Doglist API!</h1>
-        <button onclick="location.href='{{ url_for('list_dogs') }}'">See the Doglist</button>
-        <button onclick="location.href='/add-dog-form'">Add a Dog</button>
-    </body>
-    </html>
-    '''
-    return render_template_string(home_page_html)
-
-@app.route('/add-dog-form', methods=['GET'])
-@token_required
-def add_dog_form():
-    add_dog_form_html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Add a Dog</title>
-    </head>
-    <body>
-        <h1>Add a Dog</h1>
-        <form id="dogForm">
-            <label for="name">Name:</label>
-            <input type="text" id="name" name="name"><br><br>
-            <label for="breed">Breed:</label>
-            <input type="text" id="breed" name="breed"><br><br>
-            <button type="button" onclick="submitForm()">Add Dog</button>
-        </form>
-        <script>
-            function submitForm() {
-                const form = document.getElementById('dogForm');
-                const data = {
-                    name: form.name.value,
-                    breed: form.breed.value
-                };
-
-                fetch('/dogs', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    alert('Dog added successfully!');
-                    form.reset();
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Failed to add dog.');
-                });
-            }
-        </script>
-    </body>
-    </html>
-    '''
-    return render_template_string(add_dog_form_html)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_ENV') == 'development', host='0.0.0.0')

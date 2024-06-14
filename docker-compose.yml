@@ -85,6 +85,25 @@ services:
     networks:
       - mynetwork
 
+  frontend-dev:
+    container_name: frontend-dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      REACT_APP_KEYCLOAK_URL: http://keycloak:8080/auth
+      REACT_APP_BACKEND_URL: http://localhost:5000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - mynetwork
+    depends_on:
+      - backend-dev  
+
 networks:
   mynetwork:
     driver: bridge
