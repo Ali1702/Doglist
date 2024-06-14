@@ -4,3 +4,4 @@ mysql-connector-python
 python-keycloak
 PyYAML
 gunicorn
+PyJWT

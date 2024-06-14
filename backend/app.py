@@ -1,14 +1,19 @@
+import logging
+import os
+import jwt
 from flask import Flask, request, jsonify, redirect, url_for, render_template_string
 from flask_cors import CORS
 import mysql.connector
 from keycloak import KeycloakOpenID, KeycloakGetError
 from functools import wraps
-import os
 
 app = Flask(__name__)
 CORS(app)
 
 app.config.from_object('config.Config')
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
 
 # Database configuration
 db_config = {
@@ -43,8 +48,12 @@ def token_required(f):
         if not token:
             return redirect(url_for('login', next=request.endpoint))
         try:
+            # Decode the token to log the claims
+            decoded_token = jwt.decode(token, options={"verify_signature": False})
+            logging.debug(f'Token claims: {decoded_token}')
             keycloak_openid.userinfo(token)
         except KeycloakGetError as e:
+            logging.error(f'Keycloak error: {e}')
             if e.response_code == 401:
                 return jsonify({'message': 'Token is invalid or expired!'}), 401
             else:
@@ -55,19 +64,23 @@ def token_required(f):
 @app.route('/login')
 def login():
     redirect_uri = url_for('callback', _external=True)
-    redirect_uri = redirect_uri.replace(request.host_url, public_keycloak_url)
-    auth_url = keycloak_openid.auth_url(redirect_uri=redirect_uri)
+    auth_url = keycloak_openid.auth_url(redirect_uri=redirect_uri, scope='openid email profile')
     return redirect(auth_url)
 
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
     redirect_uri = url_for('callback', _external=True)
-    redirect_uri = redirect_uri.replace(request.host_url, public_keycloak_url)
-    token = keycloak_openid.token(code=code, redirect_uri=redirect_uri, session_state = request.args.get('session_state'), grant_type='authorization_code')
-    tokens['token'] = token['access_token']
-    next_url = request.args.get('next')
-    return redirect(url_for(next_url) if next_url else url_for('home'))
+    logging.debug(f'Received code: {code}')
+    try:
+        token = keycloak_openid.token(code=code, redirect_uri=redirect_uri, session_state=request.args.get('session_state'), grant_type='authorization_code')
+        logging.debug(f'Received token: {token}')
+        tokens['token'] = token['access_token']
+        next_url = request.args.get('next')
+        return redirect(url_for(next_url) if next_url else url_for('home'))
+    except KeycloakGetError as e:
+        logging.error(f'Error during token exchange: {e}')
+        return jsonify({'message': 'Failed to obtain token from Keycloak'}), 500
 
 @app.route('/dogs', methods=['GET'])
 @token_required
@@ -122,13 +135,39 @@ def add_dog_form():
     </head>
     <body>
         <h1>Add a Dog</h1>
-        <form action="{{ url_for('add_dog') }}" method="post">
+        <form id="dogForm">
             <label for="name">Name:</label>
             <input type="text" id="name" name="name"><br><br>
             <label for="breed">Breed:</label>
             <input type="text" id="breed" name="breed"><br><br>
-            <input type="submit" value="Add Dog">
+            <button type="button" onclick="submitForm()">Add Dog</button>
         </form>
+        <script>
+            function submitForm() {
+                const form = document.getElementById('dogForm');
+                const data = {
+                    name: form.name.value,
+                    breed: form.breed.value
+                };
+
+                fetch('/dogs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Dog added successfully!');
+                    form.reset();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to add dog.');
+                });
+            }
+        </script>
     </body>
     </html>
     '''
