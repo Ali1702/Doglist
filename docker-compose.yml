@@ -1,70 +1,94 @@
 version: "3.7"
 
 services:
-    mariadb1:
-        container_name: mariadb1
-        build: ./mariadb01
-        environment:
-            MYSQL_ROOT_PASSWORD: example
-            MYSQL_USER: maxscale_user
-            MYSQL_PASSWORD: 12345678
-        ports:
-            - "3307:3306"
-        networks:
-            - mynetwork
-        volumes:
-            #- ./docker_config/galera_cluster1.cnf:/etc/mysql/mariadb.conf.d/60-galera.cnf,ro
-            - ./docker_config/init_mariadb.sql:/docker-entrypoint-initdb.d/init.sql
+  mariadb1:
+    container_name: mariadb1
+    build: ./mariadb01
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_USER: maxscale_user
+      MYSQL_PASSWORD: 12345678
+    ports:
+      - "3307:3306"
+    networks:
+      - mynetwork
+    volumes:
+      - ./docker_config/init_mariadb.sql:/docker-entrypoint-initdb.d/init.sql
 
-    mariadb2:
-        container_name: mariadb2
-        build: ./mariadb02
-        environment:
-            MYSQL_ROOT_PASSWORD: example
-            MYSQL_USER: maxscale_user
-            MYSQL_PASSWORD: 12345678
-        ports:
-            - "3308:3306"
-        networks:
-            - mynetwork
-        volumes:
-            #- ./docker_config/galera_cluster2.cnf:/etc/mysql/mariadb.conf.d/60-galera.cnf,ro
-            - ./docker_config/init_mariadb.sql:/docker-entrypoint-initdb.d/init.sql
+  mariadb2:
+    container_name: mariadb2
+    build: ./mariadb02
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_USER: maxscale_user
+      MYSQL_PASSWORD: 12345678
+    ports:
+      - "3308:3306"
+    networks:
+      - mynetwork
+    volumes:
+      - ./docker_config/init_mariadb.sql:/docker-entrypoint-initdb.d/init.sql
 
-    maxscale:
-        container_name: maxscale
-        image: mariadb/maxscale:latest
-        ports:
-            - "4008:4008"
-            - "4006:4006"
-            - "8989:8989"
-        depends_on:
-            - mariadb1
-            - mariadb2
-        volumes:
-            - ./maxscale.cnf:/etc/maxscale.cnf
-        networks:
-            - mynetwork
+  maxscale:
+    container_name: maxscale
+    image: mariadb/maxscale:latest
+    ports:
+      - "4008:4008"
+      - "4006:4006"
+      - "8989:8989"
+    depends_on:
+      - mariadb1
+      - mariadb2
+    volumes:
+      - ./maxscale.cnf:/etc/maxscale.cnf
+    networks:
+      - mynetwork
 
-    keycloak:
-        container_name: keycloak
-        image: quay.io/keycloak/keycloak:latest
-        command: -v start-dev --import-realm
-        environment:
-            KEYCLOAK_ADMIN: admin
-            KEYCLOAK_ADMIN_PASSWORD: admin
-            DB_VENDOR: H2
-        ports:
-            - "8080:8080"
-        networks:
-            - mynetwork
-        volumes:
-            - ./docker_config/keycloak.json:/opt/keycloak/data/import/keycloak.json
+  keycloak:
+    container_name: keycloak
+    image: quay.io/keycloak/keycloak:latest
+    command: -v start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      DB_VENDOR: H2
+      KC_HTTP_ENABLED: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/keycloak_data:/opt/keycloak/data/
+      - ./docker_config/keycloak.json:/opt/keycloak/data/import/keycloak.json
+    networks:
+      - mynetwork
+
+  backend-dev:
+    container_name: backend-dev
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      FLASK_ENV: development
+      DB_USER: maxscale_user
+      DB_PASSWORD: 12345678
+      DB_HOST: maxscale
+      DB_PORT: 4006
+      DB_NAME: dogs
+      KEYCLOAK_CLIENT_ID: doglist-client
+      KEYCLOAK_REALM_NAME: MyRealm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - maxscale
+      - keycloak
+    networks:
+      - mynetwork
 
 networks:
-    mynetwork:
-        driver: bridge
+  mynetwork:
+    driver: bridge
 
 volumes:
-    mariadb1_data:
-    mariadb2_data:
+  mariadb1_data:
+  mariadb2_data:
